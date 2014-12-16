@@ -1,0 +1,1 @@
+snif.d: ../snif.cpp
