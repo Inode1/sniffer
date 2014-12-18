@@ -12,6 +12,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <netinet/in.h>
 extern "C" {
@@ -23,6 +24,8 @@ using namespace std;
 
 //----------------------------------------------------------------------
 //------------------------------------------------------
+
+u_int8_t mac_adress[8] = { 0 };
 
 void
 print_hex_ascii_line(const u_char *payload, int len, int offset)
@@ -115,23 +118,57 @@ print_payload(const u_char *payload, int len)
 return;
 }
 
+int check_get_request(const char *payload, int len)
+{
+	char get[]="GET";
+	if(memmem(payload,len,get,3))
+		return 1;
+	return 0;
+}
 
+int check_mac_adress(const u_int8_t *mac_find, const u_int8_t *mac_vict)
+{
+	if(!(mac_find[0]))
+		return 0;
+	if(memcmp(mac_find,mac_vict,8))
+		return 0;
+	return 1;
+
+}
 
 static int Callback(nfq_q_handle *myQueue, struct nfgenmsg *msg,
                     nfq_data *pkt, void *cbData) {
   uint32_t id = 0;
   nfqnl_msg_packet_hdr *header;
 
+
+  if ((header = nfq_get_msg_packet_hdr(pkt))) //{
+     id = ntohl(header->packet_id);
+  /*   cout << "id " << id << "; hw_protocol " << setfill('0') << setw(4) <<
+       hex << ntohs(header->hw_protocol) << "; hook " << ('0'+header->hook)
+          << " ; ";
+   }*/
+
+  nfqnl_msg_packet_hw *macAddr = nfq_get_packet_hw(pkt);
+
+  char *pktData;
+  int len = nfq_get_payload(pkt, &pktData);
+
+
+  if(check_get_request(pktData,len)){
+	  cout<<"START++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"<<endl;
+	  printf("Payload %d\n",len);
+	  print_payload((u_char *)pktData,len);
+
+
   cout << "pkt recvd: ";
-  if ((header = nfq_get_msg_packet_hdr(pkt))) {
-    id = ntohl(header->packet_id);
     cout << "id " << id << "; hw_protocol " << setfill('0') << setw(4) <<
       hex << ntohs(header->hw_protocol) << "; hook " << ('0'+header->hook)
-         << " ; ";
-  }
+         << " ; "<<endl;;
+
 
   // The HW address is only fetchable at certain hook points
-  nfqnl_msg_packet_hw *macAddr = nfq_get_packet_hw(pkt);
+
   if (macAddr) {
     cout << "mac len " << ntohs(macAddr->hw_addrlen) << " addr ";
     for (int i = 0; i < 8; i++) {
@@ -141,6 +178,10 @@ static int Callback(nfq_q_handle *myQueue, struct nfgenmsg *msg,
   } else {
     cout << "no MAC addr";
   }
+
+  /*if(!(mac_adress[0]))
+	  memcpy(mac_adress, macAddr->hw_addr,8);*/
+
 
   timeval tv;
   if (!nfq_get_timestamp(pkt, &tv)) {
@@ -156,16 +197,11 @@ static int Callback(nfq_q_handle *myQueue, struct nfgenmsg *msg,
   cout << "; outdev " << nfq_get_outdev(pkt);
 
   cout << endl;
+  }
 
   // Print the payload; in copy meta mode, only headers will be included;
   // in copy packet mode, whole packet will be returned.
-  char *pktData;
-  int len = nfq_get_payload(pkt, &pktData);
-  cout<<"Payload ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"<<endl;
-  printf("%d\n",len);
-  cout<<"Payload ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"<<endl;
 
-  print_payload((u_char *)pktData,len);
     // end data found
 
   // For this program we'll always accept the packet...
